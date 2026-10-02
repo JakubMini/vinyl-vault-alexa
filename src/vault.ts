@@ -3,7 +3,7 @@
  * against the fields this skill relies on, so a change on the vault side fails loudly here
  * rather than being read aloud wrongly.
  */
-import * as z from "zod/mini";
+import * as is from "./shape";
 
 /** Alexa gives up after 8 seconds; leave room for the certificate fetch and speaking. */
 const VAULT_TIMEOUT_MS = 4_000;
@@ -20,37 +20,37 @@ export class VaultError extends Error {
   }
 }
 
-const collectionSummary = z.object({
-  currency: z.string(),
-  total_minor: z.int(),
-  record_count: z.int(),
-  valued_count: z.int(),
-  unpriced_count: z.int(),
-  last_valued_at: z.nullable(z.string()),
+const collectionSummary = is.object({
+  currency: is.string,
+  total_minor: is.int,
+  record_count: is.int,
+  valued_count: is.int,
+  unpriced_count: is.int,
+  last_valued_at: is.nullable(is.string),
 });
-export type CollectionSummary = z.infer<typeof collectionSummary>;
+export type CollectionSummary = is.Checked<typeof collectionSummary>;
 
-const dailyTotals = z.object({
+const dailyTotals = is.object({
   /** One entry per UTC day that has a total, oldest first. Days before tracking began are absent. */
-  daily: z.array(z.object({ day: z.string() })),
+  daily: is.array(is.object({ day: is.string })),
 });
 
-const listedRecord = z.object({
-  id: z.int(),
-  artist: z.string(),
-  title: z.string(),
-  year: z.nullable(z.int()),
-  media_condition: z.string(),
-  current_value_minor: z.nullable(z.int()),
-  current_currency: z.nullable(z.string()),
+const listedRecord = is.object({
+  id: is.int,
+  artist: is.string,
+  title: is.string,
+  year: is.nullable(is.int),
+  media_condition: is.string,
+  current_value_minor: is.nullable(is.int),
+  current_currency: is.nullable(is.string),
   /** Set when the record has left the Discogs collection; such records are not "in" the collection. */
-  discogs_removed_at: z.nullable(z.string()),
+  discogs_removed_at: is.nullable(is.string),
   /** Value now minus value 30 days ago, or minus its first price if that was more recent. */
-  change_30d_minor: z.nullable(z.int()),
+  change_30d_minor: is.nullable(is.int),
 });
-export type CollectionRecord = z.infer<typeof listedRecord>;
+export type CollectionRecord = is.Checked<typeof listedRecord>;
 
-const recordsPage = z.object({ records: z.array(listedRecord), total: z.int() });
+const recordsPage = is.object({ records: is.array(listedRecord), total: is.int });
 
 export interface Vault {
   /** GET /api/collection: the total value of every record still in the collection. */
@@ -62,7 +62,7 @@ export interface Vault {
 }
 
 export function vaultClient(binding: Fetcher, apiKey: string): Vault {
-  async function get<T>(path: string, schema: z.ZodMiniType<T>): Promise<T> {
+  async function get<T>(path: string, schema: is.Check<T>): Promise<T> {
     if (!apiKey) throw new VaultError("VAULT_API_KEY is not configured");
     let response: Response;
     try {
@@ -75,9 +75,9 @@ export function vaultClient(binding: Fetcher, apiKey: string): Vault {
       throw new VaultError(`GET ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     if (!response.ok) throw new VaultError(`GET ${path} returned ${response.status}`);
-    const parsed = schema.safeParse(await response.json().catch(() => undefined));
-    if (!parsed.success) throw new VaultError(`GET ${path} returned an unexpected shape`);
-    return parsed.data;
+    const body: unknown = await response.json().catch(() => undefined);
+    if (!schema(body)) throw new VaultError(`GET ${path} returned an unexpected shape`);
+    return body;
   }
 
   return {

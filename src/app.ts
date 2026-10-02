@@ -3,7 +3,7 @@
  * the signature over it has been checked, and nothing is answered until the request is shown
  * to be fresh and addressed to this skill.
  */
-import { Hono } from "hono";
+import { Hono } from "hono/tiny";
 
 import {
   type AlexaRequest,
@@ -11,7 +11,7 @@ import {
   type ResponseEnvelope,
   applicationId,
   emptyResponse,
-  envelopeSchema,
+  isEnvelope,
   isIntentRequest,
   isSessionEndedRequest,
   toResponse,
@@ -72,9 +72,8 @@ function parseEnvelope(body: string): Envelope {
   } catch {
     throw new VerificationError("body is not JSON");
   }
-  const parsed = envelopeSchema.safeParse(json);
-  if (!parsed.success) throw new VerificationError("body is not an Alexa request");
-  return parsed.data;
+  if (!isEnvelope(json)) throw new VerificationError("body is not an Alexa request");
+  return json;
 }
 
 interface Outcome {

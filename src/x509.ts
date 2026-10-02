@@ -236,7 +236,9 @@ export function base64(text: string): Uint8Array {
   } catch {
     throw new CertificateError("invalid base64");
   }
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
