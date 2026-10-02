@@ -7,6 +7,7 @@ import {
   CERT_URL,
   SKILL_ID,
   chainPem,
+  currentAmazonChainPem,
   ecChainPem,
   ecRootPem,
   impostorChainPem,
@@ -144,6 +145,15 @@ describe("the certificate chain", () => {
     expect(chain).toHaveLength(4);
     expect(await asyncReason(checkChain(chain, amazon, new Date("2023-06-01")))).toBeUndefined();
     expect(await asyncReason(checkChain(chain, amazon, now))).toBe("cert 0 has expired");
+  });
+
+  // The chain Alexa signed this skill's live requests with in October 2026, from
+  // https://s3.amazonaws.com/echo.api/echo-api-cert-EUAmazon-prod-30584302.pem (valid to Feb 2027).
+  it("accepts the chain Alexa signs with today, checked as of October 2026", async () => {
+    const chain = parseChain(currentAmazonChainPem);
+    expect(chain).toHaveLength(3);
+    expect(await asyncReason(checkChain(chain, amazonRoots(), new Date("2026-10-02T12:00:00Z")))).toBeUndefined();
+    expect(await asyncReason(checkChain(chain, anchors, new Date("2026-10-02T12:00:00Z")))).toBe("chain does not reach a trusted root");
   });
 
   it("pins five Amazon roots that are all valid today", () => {

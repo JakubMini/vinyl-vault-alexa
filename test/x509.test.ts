@@ -5,6 +5,7 @@ import { AMAZON_ROOT_PEMS } from "../src/amazon-roots";
 import { CertificateError, type Certificate, isSignedBy, parseCertificate, pemCertificates } from "../src/x509";
 import {
   chainPem,
+  currentAmazonChainPem,
   ecChainPem,
   ecRootPem,
   impostorChainPem,
@@ -27,6 +28,7 @@ const bundles = {
   "impostor chain": impostorChainPem,
   "renamed intermediate": renamedIntermediatePem,
   "real Amazon chain (2023)": realAmazonChainPem,
+  "Amazon chain in use (2026)": currentAmazonChainPem,
   "pinned Amazon roots": AMAZON_ROOT_PEMS.join("\n"),
 };
 
@@ -46,7 +48,7 @@ const certificates: Pair[] = Object.entries(bundles).flatMap(([bundle, pem]) =>
 
 describe("parseCertificate, against node:crypto", () => {
   it("has every fixture to compare", () => {
-    expect(certificates.length).toBe(2 + 1 + 2 + 2 + 2 + 1 + 2 + 1 + 4 + 5);
+    expect(certificates.length).toBe(2 + 1 + 2 + 2 + 2 + 1 + 2 + 1 + 4 + 3 + 5);
   });
 
   it.each(certificates.map((c) => [c.name, c] as const))("reads %s the same way", (_name, { ours, node }) => {

@@ -17,6 +17,7 @@ export { default as ecRootPem } from "./fixtures/certs/ec-root.pem?raw";
 export { default as impostorChainPem } from "./fixtures/certs/impostor-chain.pem?raw";
 export { default as renamedIntermediatePem } from "./fixtures/certs/renamed-intermediate.pem?raw";
 export { default as realAmazonChainPem } from "./fixtures/certs/amazon-echo-api-cert-12.pem?raw";
+export { default as currentAmazonChainPem } from "./fixtures/certs/amazon-echo-api-cert-eu-2026.pem?raw";
 
 export const SKILL_ID = "amzn1.ask.skill.test";
 export const CERT_URL = "https://s3.amazonaws.com/echo.api/echo-api-cert-test.pem";
