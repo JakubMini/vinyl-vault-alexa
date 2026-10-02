@@ -95,8 +95,8 @@ npm run check   # types, typecheck, tests
 
 This happens once, and some steps need my own logins:
 
-1. **The skill.** Log in to the Amazon developer account that owns the Echo with `npx ask-cli configure`. Then run `npx ask-cli deploy`, which creates the skill from `skill-package/` and prints its id. `ask-resources.json` has no infrastructure section, so the CLI only pushes the skill definition and never touches AWS.
-2. **The id.** Put the id in `wrangler.jsonc` as `ALEXA_SKILL_ID`. While it is empty, the Worker refuses every request.
+1. **The skill.** Sign in at [developer.amazon.com](https://developer.amazon.com) with the Amazon account the Echo uses, and complete the developer registration. Without it the account has no vendor ID, and the CLI stops with "There is no Vendor ID associated with your account". Then log the CLI in with `npx ask-cli configure`, and run `npx ask-cli deploy`. That creates the skill from `skill-package/`. `ask-resources.json` has no infrastructure section, so the CLI only pushes the skill definition and never touches AWS.
+2. **The id.** The CLI records the new skill's id in `.ask/ask-states.json`. That file is committed, so later deploys update the same skill instead of creating another. The same id goes in `wrangler.jsonc` as `ALEXA_SKILL_ID`; if that is ever empty, the Worker refuses every request.
 3. **The Worker.** Check `npx wrangler whoami` names the personal Cloudflare account. Then run `npx wrangler secret put VAULT_API_KEY` and `npm run deploy`. It deploys to `https://vinyl-vault-alexa.jakub-m-szypicyn.workers.dev`, the endpoint `skill.json` points at.
 4. **Test.** Use the developer console's test tab first, then the Echo. A skill in development is available on every device on the developer's own Amazon account, with no publishing needed. The Echo's language must match the skill's locale, English (UK).
 

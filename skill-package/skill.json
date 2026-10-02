@@ -12,7 +12,11 @@
             "Alexa, ask vinyl vault what my collection is worth",
             "Alexa, ask vinyl vault how much are my records worth"
           ],
-          "keywords": ["vinyl", "records", "collection"]
+          "keywords": [
+            "vinyl",
+            "records",
+            "collection"
+          ]
         }
       }
     },
