@@ -3,7 +3,7 @@
  * (skill-package/interactionModels/custom/en-GB.json); a test keeps the two in step.
  * Handlers ask the vault, pick out what matters (src/collection.ts) and phrase the answer.
  */
-import { findRecords, mostValuable, risers, words } from "./collection";
+import { byText, findRecords, mostValuable, risers, words } from "./collection";
 import { type Reply, type Slot, resolvedId } from "./envelope";
 import { artistName, count, day, grade, list, money, recordName } from "./speech";
 import type { CollectionRecord, CollectionSummary, Vault } from "./vault";
@@ -142,7 +142,7 @@ export function risersAnswer(
 /** "Do I have Rumours?" One match gets its details; several are listed, most valuable first. */
 export function findAnswer(records: readonly CollectionRecord[], query: string): Reply {
   const matches = [...findRecords(records, query)].sort(
-    (a, b) => (b.current_value_minor ?? -1) - (a.current_value_minor ?? -1) || a.title.localeCompare(b.title),
+    (a, b) => (b.current_value_minor ?? -1) - (a.current_value_minor ?? -1) || byText(a.title, b.title),
   );
   const [first] = matches;
   if (!first) return { speech: `I couldn't find ${query} in your collection.`, endSession: true };

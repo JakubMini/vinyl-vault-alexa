@@ -7,10 +7,20 @@
  * names echo-api.amazon.com and chains to a pinned Amazon root, and that the signature matches
  * the body. Then, once the body is parsed, that it is fresh and addressed to this skill.
  *
- * All the cryptography is node:crypto, which Workers implement natively: no pure-JS RSA.
+ * The signatures are checked with WebCrypto, which the runtime implements natively; the
+ * certificates are read by src/x509.ts. Not node:crypto: see that file for why.
  */
-import { Buffer } from "node:buffer";
-import { X509Certificate, verify } from "node:crypto";
+import {
+  type Certificate,
+  CertificateError,
+  RSA_KEY,
+  base64,
+  equalBytes,
+  isSignedBy,
+  parseCertificate,
+  pemCertificates,
+  verifySignatureWith,
+} from "./x509";
 
 /** Amazon's limit: requests more than 150 seconds from now are refused. */
 export const MAX_CLOCK_SKEW_MS = 150_000;
@@ -43,13 +53,19 @@ export function checkCertUrl(raw: string | null): URL {
 }
 
 /** Splits a PEM bundle into certificates, leaf first, as Amazon serves it. */
-export function parseChain(pem: string): X509Certificate[] {
-  const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
-  if (blocks.length === 0) throw new VerificationError("no certificates in chain");
+export function parseChain(pem: string): Certificate[] {
+  let ders: Uint8Array[];
   try {
-    return blocks.map((block) => new X509Certificate(block));
+    ders = pemCertificates(pem);
   } catch {
     throw new VerificationError("unparseable certificate in chain");
+  }
+  if (ders.length === 0) throw new VerificationError("no certificates in chain");
+  try {
+    return ders.map(parseCertificate);
+  } catch (error) {
+    if (error instanceof CertificateError) throw new VerificationError("unparseable certificate in chain");
+    throw error;
   }
 }
 
@@ -59,26 +75,23 @@ export function parseChain(pem: string): X509Certificate[] {
  * one, ends the walk; until then each certificate must be signed by the CA after it. Stopping at
  * the first anchor means extra cross-signed certificates at the end of the bundle do not matter.
  */
-export function checkChain(chain: X509Certificate[], anchors: readonly X509Certificate[], now: Date): void {
+export async function checkChain(chain: readonly Certificate[], anchors: readonly Certificate[], now: Date): Promise<void> {
   const leaf = chain[0];
   if (!leaf) throw new VerificationError("empty chain");
-  const sans = (leaf.subjectAltName ?? "").split(/,\s*/);
-  if (!sans.includes(`DNS:${SIGNING_HOST}`)) throw new VerificationError("signing cert does not name echo-api.amazon.com");
+  if (!leaf.dnsNames.includes(SIGNING_HOST)) throw new VerificationError("signing cert does not name echo-api.amazon.com");
 
   for (const [i, cert] of chain.entries()) {
-    if (now < new Date(cert.validFrom)) throw new VerificationError(`cert ${i} is not yet valid`);
-    if (now > new Date(cert.validTo)) throw new VerificationError(`cert ${i} has expired`);
-    if (anchors.some((anchor) => cert.fingerprint256 === anchor.fingerprint256 || signedBy(cert, anchor))) return;
+    if (now < cert.notBefore) throw new VerificationError(`cert ${i} is not yet valid`);
+    if (now > cert.notAfter) throw new VerificationError(`cert ${i} has expired`);
+    for (const anchor of anchors) {
+      if (equalBytes(cert.der, anchor.der) || (await isSignedBy(cert, anchor))) return;
+    }
     const issuer = chain[i + 1];
     if (!issuer) break;
-    if (!issuer.ca) throw new VerificationError(`cert ${i + 1} is not a CA`);
-    if (!signedBy(cert, issuer)) throw new VerificationError(`cert ${i} is not signed by cert ${i + 1}`);
+    if (!issuer.isCA) throw new VerificationError(`cert ${i + 1} is not a CA`);
+    if (!(await isSignedBy(cert, issuer))) throw new VerificationError(`cert ${i} is not signed by cert ${i + 1}`);
   }
   throw new VerificationError("chain does not reach a trusted root");
-}
-
-function signedBy(cert: X509Certificate, issuer: X509Certificate): boolean {
-  return cert.checkIssued(issuer) && cert.verify(issuer.publicKey);
 }
 
 /**
@@ -87,8 +100,8 @@ function signedBy(cert: X509Certificate, issuer: X509Certificate): boolean {
  */
 export async function verifySignature(
   headers: Headers,
-  body: string,
-  anchors: readonly X509Certificate[],
+  body: Uint8Array,
+  anchors: readonly Certificate[],
   now: Date,
 ): Promise<void> {
   const url = checkCertUrl(headers.get("SignatureCertChainUrl"));
@@ -106,9 +119,16 @@ export async function verifySignature(
   }
 
   const chain = parseChain(pem);
-  checkChain(chain, anchors, now);
+  await checkChain(chain, anchors, now);
   const leaf = chain[0]!; // parseChain never returns an empty array
-  const matches = verify("sha256", Buffer.from(body), leaf.publicKey, Buffer.from(signature, "base64"));
+  // Alexa signs with RSA and SHA-256 (the "256" in the header's name).
+  let signed: Uint8Array;
+  try {
+    signed = base64(signature);
+  } catch {
+    throw new VerificationError("Signature-256 is not base64");
+  }
+  const matches = leaf.publicKey.algorithm === RSA_KEY && (await verifySignatureWith(leaf.publicKey, "SHA-256", signed, body));
   if (!matches) throw new VerificationError("signature does not match body");
 }
 

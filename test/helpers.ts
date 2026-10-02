@@ -12,6 +12,12 @@ import { network } from "./network";
 export { chainPem, testRootPem };
 export { default as rogueChainPem } from "./fixtures/certs/rogue-chain.pem?raw";
 export { default as wrongSanChainPem } from "./fixtures/certs/wrong-san-chain.pem?raw";
+export { default as ecChainPem } from "./fixtures/certs/ec-chain.pem?raw";
+export { default as ecRootPem } from "./fixtures/certs/ec-root.pem?raw";
+export { default as impostorChainPem } from "./fixtures/certs/impostor-chain.pem?raw";
+export { default as renamedIntermediatePem } from "./fixtures/certs/renamed-intermediate.pem?raw";
+export { default as realAmazonChainPem } from "./fixtures/certs/amazon-echo-api-cert-12.pem?raw";
+export { default as currentAmazonChainPem } from "./fixtures/certs/amazon-echo-api-cert-eu-2026.pem?raw";
 
 export const SKILL_ID = "amzn1.ask.skill.test";
 export const CERT_URL = "https://s3.amazonaws.com/echo.api/echo-api-cert-test.pem";

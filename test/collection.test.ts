@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findRecords, mostValuable, risers, words } from "../src/collection";
+import { findRecords, mostValuable, risers, withinEdits, words } from "../src/collection";
 import { fakeRecord } from "./fake-vault";
 
 describe("words", () => {
@@ -87,5 +87,24 @@ describe("findRecords", () => {
   it("finds nothing for an empty query", () => {
     expect(titles("")).toEqual([]);
     expect(titles("?!")).toEqual([]);
+  });
+});
+
+describe("withinEdits", () => {
+  it.each([
+    ["rumors", "rumours", 1, true], // one insertion
+    ["nevermnd", "nevermind", 1, true],
+    ["kitten", "sitting", 2, false], // the textbook pair is 3 apart
+    ["kitten", "sitting", 3, true],
+    ["flaw", "lawn", 2, true],
+    ["abc", "abc", 0, true],
+    ["abc", "abd", 0, false],
+    ["", "ab", 2, true],
+    ["mlynarski", "mlynarsky", 1, true],
+    ["mlynarski", "malinarski", 1, false],
+    ["mlynarski", "malinarski", 2, true],
+  ])("%s -> %s within %i edits: %s", (a, b, limit, expected) => {
+    expect(withinEdits(a, b, limit)).toBe(expected);
+    expect(withinEdits(b, a, limit)).toBe(expected);
   });
 });

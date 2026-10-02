@@ -18,6 +18,27 @@ describe("money", () => {
 
   it("uses the currency it is given", () => {
     expect(money(250_000, "EUR")).toBe("€2,500");
+    expect(money(1_999, "USD")).toBe("$20");
+    expect(money(1_250, "PLN")).toBe("PLN 13");
+  });
+
+  // Formatted by hand to avoid Intl's cold-start cost; these match what Intl.NumberFormat
+  // ("en-GB", currency) said for the same amounts.
+  it.each([
+    [100_000_000, "£1,000,000"],
+    [1_005, "£10"],
+    [5, "£0.05"],
+    [-1_200, "-£12"],
+    [-450, "-£4.50"],
+  ])("says %i pence as %s, as Intl did", (minor, expected) => {
+    expect(money(minor, "GBP")).toBe(expected);
+    const intl = new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+      minimumFractionDigits: Math.abs(minor) >= 1000 || minor % 100 === 0 ? 0 : 2,
+      maximumFractionDigits: Math.abs(minor) >= 1000 || minor % 100 === 0 ? 0 : 2,
+    }).format(minor / 100);
+    expect(money(minor, "GBP")).toBe(intl);
   });
 });
 

@@ -1,22 +1,22 @@
 /**
- * The slice of Alexa's request and response JSON this skill uses, typed with Zod instead of
- * the Alexa SDK. Unknown fields are ignored, so new ones Amazon adds do not break parsing.
+ * The slice of Alexa's request and response JSON this skill uses, checked with src/shape.ts
+ * instead of the Alexa SDK. Unknown fields are ignored, so new ones Amazon adds do not break it.
  * Reference: https://developer.amazon.com/en-US/docs/alexa/custom-skills/request-and-response-json-reference.html
  */
-import { z } from "zod";
+import * as is from "./shape";
 
 // For a custom slot type Alexa says what it heard (`value`) and, separately, which of the
 // type's values that resolved to (`resolutions`), so "past seven days" can arrive as "week".
-const resolution = z.object({
-  status: z.object({ code: z.string() }),
-  values: z.array(z.object({ value: z.object({ name: z.string(), id: z.string().optional() }) })).optional(),
+const resolution = is.object({
+  status: is.object({ code: is.string }),
+  values: is.optional(is.array(is.object({ value: is.object({ name: is.string, id: is.optional(is.string) }) }))),
 });
-const slot = z.object({
-  name: z.string(),
-  value: z.string().optional(),
-  resolutions: z.object({ resolutionsPerAuthority: z.array(resolution) }).optional(),
+const slot = is.object({
+  name: is.string,
+  value: is.optional(is.string),
+  resolutions: is.optional(is.object({ resolutionsPerAuthority: is.array(resolution) })),
 });
-export type Slot = z.infer<typeof slot>;
+export type Slot = is.Checked<typeof slot>;
 
 /** The id of the slot type value Alexa matched, if it matched one ("ER_SUCCESS_MATCH"). */
 export function resolvedId(slot: Slot | undefined): string | undefined {
@@ -25,43 +25,39 @@ export function resolvedId(slot: Slot | undefined): string | undefined {
   return value?.id ?? value?.name;
 }
 
-const common = { requestId: z.string(), timestamp: z.string(), locale: z.string().optional() };
+const common = { requestId: is.string, timestamp: is.string, locale: is.optional(is.string) };
 
-const launchRequest = z.object({ type: z.literal("LaunchRequest"), ...common });
-const intentRequest = z.object({
-  type: z.literal("IntentRequest"),
+const launchRequest = is.object({ type: is.literal("LaunchRequest"), ...common });
+const intentRequest = is.object({
+  type: is.literal("IntentRequest"),
   ...common,
-  intent: z.object({ name: z.string(), slots: z.record(z.string(), slot).optional() }),
+  intent: is.object({ name: is.string, slots: is.optional(is.record(slot)) }),
 });
-const sessionEndedRequest = z.object({
-  type: z.literal("SessionEndedRequest"),
+const sessionEndedRequest = is.object({
+  type: is.literal("SessionEndedRequest"),
   ...common,
-  reason: z.string().optional(),
-  error: z.object({ type: z.string(), message: z.string() }).optional(),
+  reason: is.optional(is.string),
+  error: is.optional(is.object({ type: is.string, message: is.string })),
 });
 // Anything else Alexa might send (System.ExceptionEncountered, CanFulfillIntentRequest, …).
-const otherRequest = z.object({ type: z.string(), ...common });
+const otherRequest = is.object({ type: is.string, ...common });
 
-const application = z.object({ applicationId: z.string() });
+const application = is.object({ applicationId: is.string });
 
-export const envelopeSchema = z.object({
-  version: z.string(),
-  session: z.object({ new: z.boolean(), application }).optional(),
-  context: z.object({ System: z.object({ application }) }).optional(),
-  request: z.union([launchRequest, intentRequest, sessionEndedRequest, otherRequest]),
+export const isEnvelope = is.object({
+  version: is.string,
+  session: is.optional(is.object({ new: is.boolean, application })),
+  context: is.optional(is.object({ System: is.object({ application }) })),
+  request: is.union(launchRequest, intentRequest, sessionEndedRequest, otherRequest),
 });
-export type Envelope = z.infer<typeof envelopeSchema>;
+export type Envelope = is.Checked<typeof isEnvelope>;
 export type AlexaRequest = Envelope["request"];
-export type IntentRequest = z.infer<typeof intentRequest>;
-export type SessionEndedRequest = z.infer<typeof sessionEndedRequest>;
+export type IntentRequest = is.Checked<typeof intentRequest>;
+export type SessionEndedRequest = is.Checked<typeof sessionEndedRequest>;
 
 // `otherRequest` has `type: string`, so comparing `type` alone does not narrow the union.
-export function isIntentRequest(request: AlexaRequest): request is IntentRequest {
-  return request.type === "IntentRequest" && "intent" in request;
-}
-export function isSessionEndedRequest(request: AlexaRequest): request is SessionEndedRequest {
-  return request.type === "SessionEndedRequest";
-}
+export const isIntentRequest = intentRequest as (request: AlexaRequest) => request is IntentRequest;
+export const isSessionEndedRequest = sessionEndedRequest as (request: AlexaRequest) => request is SessionEndedRequest;
 
 /** The skill id the request is addressed to. `context` is always sent; `session` is the fallback. */
 export function applicationId(envelope: Envelope): string | undefined {

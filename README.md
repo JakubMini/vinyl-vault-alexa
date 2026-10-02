@@ -66,15 +66,31 @@ The endpoint is a public URL, so anyone could post to it. Amazon requires every 
 
 Any failure is a `400`, logged with the reason. There is no bypass and no "development mode". The tests sign real requests with a throwaway certificate authority (see [`scripts/make-test-certs.sh`](scripts/make-test-certs.sh)) and hand that authority to the verifier explicitly. The deployed Worker only ever trusts Amazon's roots, and a test proves it refuses the test certificates.
 
-All the cryptography is the Workers runtime's built-in `node:crypto`: X.509 parsing, chain checks and RSA signature verification. No crypto library is bundled, and the expensive work runs natively rather than in JavaScript, which matters on the free plan's 10 ms CPU budget.
+The signatures, RSA and ECDSA, are checked with WebCrypto, which the runtime implements natively. The certificates are read by [`src/x509.ts`](src/x509.ts), a small reader for the few fields the checks need. It replaced Node's `X509Certificate` because loading `node:crypto` cost most of a request's CPU budget (see [Staying inside 10 ms of CPU](#staying-inside-10-ms-of-cpu)). Because that reader is security code, it is tested hard:
+- On 25 certificates, every field it reads is compared with Node's reading, and so is every pair of "who signed whom". The 25 include Amazon's roots, the chain Alexa signs with today and one from 2023.
+- Every truncated, extended or single-byte-altered certificate is refused.
+- Separate tests cover an ECDSA chain, an impostor that copies the trusted names with its own keys, and a renamed intermediate that keeps the real key under another name.
+
+### Staying inside 10 ms of CPU
+
+The Workers free plan allows 10 ms of CPU per request. Alexa traffic is sparse, so most requests arrive at a fresh copy of the Worker and pay its start-up costs too. The first version used 5–37 ms. Profiling showed that the time went on things the skill never needed to pay for, not on its own work:
+
+| Cost per fresh copy (measured on a laptop; Cloudflare's machines are slower) | CPU | Now |
+| --- | --- | --- |
+| Loading `node:crypto` for certificate checks | ~8 ms | WebCrypto and a small certificate reader |
+| The first `Intl.NumberFormat`, to say "£3,450" | ~9 ms | formatted by hand, checked against `Intl` in a test |
+| The first `localeCompare`, to break a tie when sorting | ~6 ms | a plain comparison |
+| Loading and building Zod schemas (800 KiB of an 855 KiB bundle) | ~10 ms, then ~2 ms with `zod/mini` | plain type-guard functions ([`src/shape.ts`](src/shape.ts)) |
+
+Measured live through Alexa's own simulator, the median request now uses 4 ms. The worst seen was 12 ms, a fresh copy answering "do I have…", the one question that has to scan every record. The bundle went from 855 KiB to 80 KiB, and Cloudflare's measured start-up from 21 ms to 4 ms. A test fails if any of those expensive APIs comes back into the code.
 
 ## The stack, and why
 
 | Piece | Choice | Why |
 | --- | --- | --- |
 | Hosting | [Cloudflare Workers](https://developers.cloudflare.com/workers/) | The vault already runs there, so it is one account, one toolchain and one set of conventions. A service binding makes the vault a function call away. The usual choice, an Alexa-hosted AWS Lambda, would add a second cloud for one endpoint. The cost is implementing Amazon's request verification, which is above. |
-| HTTP | [Hono](https://hono.dev/) | The same small, typed router as the vault. |
-| Alexa protocol | [Zod](https://zod.dev/), no Alexa SDK | The skill uses a small slice of the request format. Typing that slice with Zod keeps the bundle small and makes unexpected input fail loudly. The vault's responses are checked the same way. |
+| HTTP | [Hono](https://hono.dev/) (`hono/tiny`) | The same small, typed router as the vault, in its smallest build: two routes need nothing more. |
+| Alexa protocol | Plain type guards, no Alexa SDK, no Zod | The skill uses a small slice of the request format. Each shape is checked by a few lines in [`src/shape.ts`](src/shape.ts), so unexpected input fails loudly, and so do surprises in the vault's responses. The vault uses Zod; here even `zod/mini` cost about 2 ms of CPU per fresh copy of the Worker just to build its schemas. |
 | Language | TypeScript, strict | Binding types are generated from the Wrangler config. |
 | Tests | [Vitest](https://vitest.dev/) with Cloudflare's plugin | Tests run inside the real Workers runtime. The vault binding is a stub, and Amazon's certificate download is mocked with [Mock Service Worker](https://mswjs.io/), so nothing touches the network. |
 | Skill definition | [ASK CLI](https://developer.amazon.com/en-US/docs/alexa/smapi/ask-cli-intro.html) | The manifest and interaction model are JSON in this repo and deployed from it, not clicked together in a console. |
@@ -122,6 +138,7 @@ This works for any fixed question. It cannot pass a record name through, so "do 
 - **Verification is not optional.** Request checks run before anything else. Each check has a test that fails if the check is removed, and the certificate address rules are tested against Amazon's own examples of good and bad URLs.
 - **The interaction model and the code move together.** A test fails if an intent in the model has no handler, or a handler has no intent.
 - **Tests run in the real runtime**, against a stub vault and a mocked network.
+- **Performance claims are measured.** CPU per request comes from production logs (`wrangler tail`) of real Alexa requests, before and after each change. Start-up cost comes from `wrangler check startup`. Guesses are checked with a profiler before any code changes.
 - **Secrets never enter the repo.** `.dev.vars` locally, `wrangler secret put` in production.
 - **This README is kept true.** A change to the architecture, the questions, the setup or the roadmap updates it in the same pull request.
 - **AI-assisted.** I build this with Claude Code as a pair programmer. The design decisions, reviews and merges are mine.
@@ -133,8 +150,10 @@ src/
   index.ts         Worker entry: the app, trusting Amazon's roots
   app.ts           routes: /health, and /alexa (verify, parse, answer)
   verify.ts        proving a request came from Alexa
+  x509.ts          reading certificates, and checking signatures with WebCrypto
   amazon-roots.ts  the pinned Amazon root certificates
-  envelope.ts      the Alexa request and response format, typed with Zod
+  envelope.ts      the Alexa request and response format, and checks on its shape
+  shape.ts         small type-guard checks for JSON from Alexa and the vault
   intents.ts       one handler per intent: what the skill says
   collection.ts    ranking and matching the record list: most valuable, risers, "do I have"
   vault.ts         the vault API client, over the service binding

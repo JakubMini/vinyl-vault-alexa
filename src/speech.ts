@@ -2,6 +2,11 @@
  * Turning numbers and names into things worth saying out loud. Alexa reads "£3,450" as "three
  * thousand four hundred and fifty pounds", so the job here is choosing what to say, not how to
  * say it.
+ *
+ * Amounts and dates are formatted by hand rather than with Intl. The first Intl formatter an
+ * isolate creates loads locale data, about 10 ms of CPU: the free plan's whole budget for a
+ * request, and Alexa traffic is sparse enough that most requests meet a fresh isolate. A test
+ * checks the hand-made amounts against Intl's.
  */
 
 /**
@@ -9,14 +14,15 @@
  * they still matter, 450 -> "£4.50", unless there are none: 400 -> "£4".
  */
 export function money(minor: number, currency: string): string {
-  const wholeUnits = Math.abs(minor) >= 1000 || minor % 100 === 0;
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: wholeUnits ? 0 : 2,
-    maximumFractionDigits: wholeUnits ? 0 : 2,
-  }).format(minor / 100);
+  const units = Math.abs(minor) / 100;
+  const wholeUnits = units >= 10 || minor % 100 === 0;
+  const [whole = "0", pence] = (wholeUnits ? Math.round(units).toString() : units.toFixed(2)).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const symbol = SYMBOLS[currency] ?? `${currency} `;
+  return `${minor < 0 ? "-" : ""}${symbol}${grouped}${pence ? `.${pence}` : ""}`;
 }
+
+const SYMBOLS: Record<string, string> = { GBP: "£", EUR: "€", USD: "$" };
 
 /** 1 -> "1 record", 3 -> "3 records". */
 export function count(n: number, singular: string, plural = `${singular}s`): string {
@@ -58,14 +64,14 @@ export function grade(code: string): string {
   return GRADE_WORDS[code] ?? code;
 }
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 /** "2026-10-02" -> "2 October", with the year only when it is not this year. */
 export function day(isoDay: string, now: Date): string {
-  const date = new Date(`${isoDay.slice(0, 10)}T00:00:00Z`);
-  const sameYear = date.getUTCFullYear() === now.getUTCFullYear();
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "long",
-    ...(sameYear ? {} : { year: "numeric" }),
-    timeZone: "UTC",
-  }).format(date);
+  const [year, month, date] = isoDay.slice(0, 10).split("-").map(Number);
+  const spoken = `${date} ${MONTHS[(month ?? 1) - 1]}`;
+  return year === now.getUTCFullYear() ? spoken : `${spoken} ${year}`;
 }

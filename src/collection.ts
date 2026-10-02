@@ -12,7 +12,7 @@ type Priced = CollectionRecord & { current_value_minor: number };
 export function mostValuable(records: readonly CollectionRecord[], n: number): Priced[] {
   return records
     .filter((record): record is Priced => record.current_value_minor !== null)
-    .sort((a, b) => b.current_value_minor - a.current_value_minor || a.artist.localeCompare(b.artist))
+    .sort((a, b) => b.current_value_minor - a.current_value_minor || byText(a.artist, b.artist))
     .slice(0, n);
 }
 
@@ -25,8 +25,16 @@ export function risers(records: readonly CollectionRecord[], n: number): Changed
       (record): record is Changed =>
         record.change_30d_minor !== null && record.change_30d_minor > 0 && record.current_value_minor !== null,
     )
-    .sort((a, b) => b.change_30d_minor - a.change_30d_minor || a.artist.localeCompare(b.artist))
+    .sort((a, b) => b.change_30d_minor - a.change_30d_minor || byText(a.artist, b.artist))
     .slice(0, n);
+}
+
+/**
+ * A plain, consistent order for ties. Not localeCompare: its first call in an isolate builds an ICU
+ * collator, about 6 ms of CPU, and a tie-break only needs to be consistent, not alphabetical.
+ */
+export function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 // Words people say around a record's name that are not part of it: "do I have ANY records BY
@@ -45,11 +53,15 @@ const OWN_LETTERS: Record<string, string> = {
 
 /** Lowercase words without accents or punctuation: "Björk's Début!" -> ["bjorks", "debut"]. */
 export function words(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[łøæœßđðþı]/g, (letter) => OWN_LETTERS[letter] ?? letter)
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "") // the accents NFKD split off
+  let plain = text.toLowerCase();
+  // Most names are plain ASCII; only the rest need letters mapped and accents stripped.
+  if (/[^\x00-\x7f]/.test(plain)) {
+    plain = plain
+      .replace(/[łøæœßđðþı]/g, (letter) => OWN_LETTERS[letter] ?? letter)
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, ""); // the accents NFKD split off
+  }
+  return plain
     .replace(/&/g, " and ")
     .replace(/['’]/g, "")
     .split(/[^a-z0-9]+/)
@@ -76,19 +88,28 @@ function similar(a: string, b: string): boolean {
   if (a === b) return true;
   const shorter = Math.min(a.length, b.length);
   const allowed = shorter >= 9 ? 2 : shorter >= 5 ? 1 : 0;
-  return allowed > 0 && Math.abs(a.length - b.length) <= allowed && editDistance(a, b) <= allowed;
+  return allowed > 0 && Math.abs(a.length - b.length) <= allowed && withinEdits(a, b, allowed);
 }
 
-/** Levenshtein distance: the fewest single-letter edits that turn `a` into `b`. */
-function editDistance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+/**
+ * Is the Levenshtein distance (the fewest single-letter insertions, deletions and substitutions
+ * that turn `a` into `b`) at most `limit`? Two reused rows, and it gives up as soon as every
+ * path through a row already costs more than the limit: most pairs fail within a letter or two.
+ */
+export function withinEdits(a: string, b: string, limit: number): boolean {
+  let previous = new Uint8Array(b.length + 1);
+  let current = new Uint8Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) previous[j] = j;
   for (let i = 1; i <= a.length; i++) {
-    const current = [i];
+    current[0] = i;
+    let best = i;
     for (let j = 1; j <= b.length; j++) {
-      const substitution = previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1);
-      current.push(Math.min(previous[j]! + 1, current[j - 1]! + 1, substitution));
+      const cost = previous[j - 1]! + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1);
+      current[j] = Math.min(previous[j]! + 1, current[j - 1]! + 1, cost);
+      if (current[j]! < best) best = current[j]!;
     }
-    previous = current;
+    if (best > limit) return false;
+    [previous, current] = [current, previous];
   }
-  return previous[b.length]!;
+  return previous[b.length]! <= limit;
 }
