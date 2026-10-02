@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { AMAZON_ROOT_PEMS } from "../src/amazon-roots";
+import realAmazonChainPem from "./fixtures/certs/amazon-echo-api-cert-12.pem?raw";
 import { VerificationError, checkCertUrl, checkChain, checkEnvelope, parseChain, verifySignature } from "../src/verify";
 import {
   CERT_URL,
@@ -107,6 +108,17 @@ describe("the certificate chain", () => {
   it("does not trust the test root in production", () => {
     const amazon = AMAZON_ROOT_PEMS.map((pem) => new X509Certificate(pem));
     expect(reason(() => checkChain(parseChain(chainPem), amazon, now))).toBe("chain does not reach a trusted root");
+  });
+
+  // A genuine chain Alexa signed with in 2023, from https://s3.amazonaws.com/echo.api/echo-api-cert-12.pem.
+  // Leaf -> Amazon RSA 2048 M01 -> Amazon Root CA 1 (cross-signed by Starfield G2) -> Starfield G2
+  // (cross-signed by Starfield Class 2, which is not pinned). The walk must stop at Amazon Root CA 1.
+  it("accepts a real Amazon signing chain, checked as of when it was current", () => {
+    const amazon = AMAZON_ROOT_PEMS.map((pem) => new X509Certificate(pem));
+    const chain = parseChain(realAmazonChainPem);
+    expect(chain).toHaveLength(4);
+    expect(reason(() => checkChain(chain, amazon, new Date("2023-06-01")))).toBeUndefined();
+    expect(reason(() => checkChain(chain, amazon, now))).toBe("cert 0 has expired");
   });
 
   it("pins five Amazon roots that are all valid today", () => {
