@@ -1,0 +1,32 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "en-GB": {
+          "name": "Vinyl Vault",
+          "summary": "Ask what your record collection is worth.",
+          "description": "Answers questions about the record collection kept in Vinyl Value Vault, starting with what the whole collection is worth.",
+          "examplePhrases": [
+            "Alexa, open vinyl vault",
+            "Alexa, ask vinyl vault what my collection is worth",
+            "Alexa, ask vinyl vault how much are my records worth"
+          ],
+          "keywords": [
+            "vinyl",
+            "records",
+            "collection"
+          ]
+        }
+      }
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "https://vinyl-vault-alexa.jakub-m-szypicyn.workers.dev/alexa",
+          "sslCertificateType": "Wildcard"
+        }
+      }
+    }
+  }
+}

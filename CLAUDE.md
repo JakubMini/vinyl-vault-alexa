@@ -59,7 +59,7 @@ and vault answers into speech. Nothing more.
 
 - TypeScript in strict mode on Cloudflare Workers. Hono for HTTP, Zod for validation, Vitest
   running inside workerd for tests. No Alexa SDK: the request envelope is small and typed with Zod.
-- Where things live: the Worker entry and routes in `src/index.ts`; request verification in
+- Where things live: the Worker entry in `src/index.ts`; routes in `src/app.ts`; request verification in
   `src/verify.ts` with the pinned Amazon roots in `src/amazon-roots.ts`; the request envelope and
   response builder in `src/envelope.ts`; intent handlers in `src/intents.ts`; the vault client in
   `src/vault.ts`; phrasing helpers (money, lists, grades) in `src/speech.ts`; the Alexa skill

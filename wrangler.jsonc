@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vinyl-vault-alexa",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  // Non-secret settings. The one secret, VAULT_API_KEY, lives in .dev.vars locally and is set
+  // with `wrangler secret put` in production. See README.
+  "vars": {
+    // The skill id, created by the first `ask deploy` on 2 Oct 2026 and also recorded in
+    // .ask/ask-states.json. Requests carrying any other id are refused. Not secret: it only
+    // names the skill. If it is ever emptied, every request is refused.
+    "ALEXA_SKILL_ID": "amzn1.ask.skill.62fad410-8998-4792-9b67-a5278173d7af"
+  },
+
+  // The vault, reached Worker to Worker inside Cloudflare rather than over its public URL.
+  // Both Workers must be on the same account. Locally, `wrangler dev` finds the vault if it
+  // is running in another terminal.
+  "services": [{ "binding": "VAULT", "service": "vinyl-value-vault" }]
+}

@@ -1,0 +1,50 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "vinyl vault",
+      "intents": [
+        {
+          "name": "CollectionValueIntent",
+          "slots": [],
+          "samples": [
+            "what my collection is worth",
+            "what is my collection worth",
+            "what's my collection worth",
+            "how much my collection is worth",
+            "how much is my collection worth",
+            "how much is my record collection worth",
+            "what is my record collection worth",
+            "what is my vinyl collection worth",
+            "what's my vinyl collection worth",
+            "how much is my vinyl collection worth",
+            "what my vinyl collection is worth",
+            "what my records are worth",
+            "what are my records worth",
+            "how much my records are worth",
+            "how much are my records worth",
+            "what my vinyl is worth",
+            "what is my vinyl worth",
+            "how much is my vinyl worth",
+            "what are my vinyls worth",
+            "how much are my vinyls worth",
+            "how much are my albums worth",
+            "what is the value of my collection",
+            "what's the value of my collection",
+            "for the value of my collection",
+            "the value of my collection",
+            "what's the total value",
+            "what is the total value of my collection",
+            "to value my collection",
+            "value my collection"
+          ]
+        },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] }
+      ],
+      "types": []
+    }
+  }
+}
