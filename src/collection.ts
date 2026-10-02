@@ -12,7 +12,7 @@ type Priced = CollectionRecord & { current_value_minor: number };
 export function mostValuable(records: readonly CollectionRecord[], n: number): Priced[] {
   return records
     .filter((record): record is Priced => record.current_value_minor !== null)
-    .sort((a, b) => b.current_value_minor - a.current_value_minor || a.artist.localeCompare(b.artist))
+    .sort((a, b) => b.current_value_minor - a.current_value_minor || byText(a.artist, b.artist))
     .slice(0, n);
 }
 
@@ -25,8 +25,16 @@ export function risers(records: readonly CollectionRecord[], n: number): Changed
       (record): record is Changed =>
         record.change_30d_minor !== null && record.change_30d_minor > 0 && record.current_value_minor !== null,
     )
-    .sort((a, b) => b.change_30d_minor - a.change_30d_minor || a.artist.localeCompare(b.artist))
+    .sort((a, b) => b.change_30d_minor - a.change_30d_minor || byText(a.artist, b.artist))
     .slice(0, n);
+}
+
+/**
+ * A plain, consistent order for ties. Not localeCompare: its first call in an isolate builds an ICU
+ * collator, about 6 ms of CPU, and a tie-break only needs to be consistent, not alphabetical.
+ */
+export function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 // Words people say around a record's name that are not part of it: "do I have ANY records BY

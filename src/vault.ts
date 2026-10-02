@@ -3,7 +3,7 @@
  * against the fields this skill relies on, so a change on the vault side fails loudly here
  * rather than being read aloud wrongly.
  */
-import { z } from "zod";
+import * as z from "zod/mini";
 
 /** Alexa gives up after 8 seconds; leave room for the certificate fetch and speaking. */
 const VAULT_TIMEOUT_MS = 4_000;
@@ -22,11 +22,11 @@ export class VaultError extends Error {
 
 const collectionSummary = z.object({
   currency: z.string(),
-  total_minor: z.number().int(),
-  record_count: z.number().int(),
-  valued_count: z.number().int(),
-  unpriced_count: z.number().int(),
-  last_valued_at: z.string().nullable(),
+  total_minor: z.int(),
+  record_count: z.int(),
+  valued_count: z.int(),
+  unpriced_count: z.int(),
+  last_valued_at: z.nullable(z.string()),
 });
 export type CollectionSummary = z.infer<typeof collectionSummary>;
 
@@ -36,21 +36,21 @@ const dailyTotals = z.object({
 });
 
 const listedRecord = z.object({
-  id: z.number().int(),
+  id: z.int(),
   artist: z.string(),
   title: z.string(),
-  year: z.number().int().nullable(),
+  year: z.nullable(z.int()),
   media_condition: z.string(),
-  current_value_minor: z.number().int().nullable(),
-  current_currency: z.string().nullable(),
+  current_value_minor: z.nullable(z.int()),
+  current_currency: z.nullable(z.string()),
   /** Set when the record has left the Discogs collection; such records are not "in" the collection. */
-  discogs_removed_at: z.string().nullable(),
+  discogs_removed_at: z.nullable(z.string()),
   /** Value now minus value 30 days ago, or minus its first price if that was more recent. */
-  change_30d_minor: z.number().int().nullable(),
+  change_30d_minor: z.nullable(z.int()),
 });
 export type CollectionRecord = z.infer<typeof listedRecord>;
 
-const recordsPage = z.object({ records: z.array(listedRecord), total: z.number().int() });
+const recordsPage = z.object({ records: z.array(listedRecord), total: z.int() });
 
 export interface Vault {
   /** GET /api/collection: the total value of every record still in the collection. */
@@ -62,7 +62,7 @@ export interface Vault {
 }
 
 export function vaultClient(binding: Fetcher, apiKey: string): Vault {
-  async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  async function get<T>(path: string, schema: z.ZodMiniType<T>): Promise<T> {
     if (!apiKey) throw new VaultError("VAULT_API_KEY is not configured");
     let response: Response;
     try {

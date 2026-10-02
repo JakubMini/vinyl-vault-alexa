@@ -3,18 +3,18 @@
  * the Alexa SDK. Unknown fields are ignored, so new ones Amazon adds do not break parsing.
  * Reference: https://developer.amazon.com/en-US/docs/alexa/custom-skills/request-and-response-json-reference.html
  */
-import { z } from "zod";
+import * as z from "zod/mini";
 
 // For a custom slot type Alexa says what it heard (`value`) and, separately, which of the
 // type's values that resolved to (`resolutions`), so "past seven days" can arrive as "week".
 const resolution = z.object({
   status: z.object({ code: z.string() }),
-  values: z.array(z.object({ value: z.object({ name: z.string(), id: z.string().optional() }) })).optional(),
+  values: z.optional(z.array(z.object({ value: z.object({ name: z.string(), id: z.optional(z.string()) }) }))),
 });
 const slot = z.object({
   name: z.string(),
-  value: z.string().optional(),
-  resolutions: z.object({ resolutionsPerAuthority: z.array(resolution) }).optional(),
+  value: z.optional(z.string()),
+  resolutions: z.optional(z.object({ resolutionsPerAuthority: z.array(resolution) })),
 });
 export type Slot = z.infer<typeof slot>;
 
@@ -25,19 +25,19 @@ export function resolvedId(slot: Slot | undefined): string | undefined {
   return value?.id ?? value?.name;
 }
 
-const common = { requestId: z.string(), timestamp: z.string(), locale: z.string().optional() };
+const common = { requestId: z.string(), timestamp: z.string(), locale: z.optional(z.string()) };
 
 const launchRequest = z.object({ type: z.literal("LaunchRequest"), ...common });
 const intentRequest = z.object({
   type: z.literal("IntentRequest"),
   ...common,
-  intent: z.object({ name: z.string(), slots: z.record(z.string(), slot).optional() }),
+  intent: z.object({ name: z.string(), slots: z.optional(z.record(z.string(), slot)) }),
 });
 const sessionEndedRequest = z.object({
   type: z.literal("SessionEndedRequest"),
   ...common,
-  reason: z.string().optional(),
-  error: z.object({ type: z.string(), message: z.string() }).optional(),
+  reason: z.optional(z.string()),
+  error: z.optional(z.object({ type: z.string(), message: z.string() })),
 });
 // Anything else Alexa might send (System.ExceptionEncountered, CanFulfillIntentRequest, …).
 const otherRequest = z.object({ type: z.string(), ...common });
@@ -46,8 +46,8 @@ const application = z.object({ applicationId: z.string() });
 
 export const envelopeSchema = z.object({
   version: z.string(),
-  session: z.object({ new: z.boolean(), application }).optional(),
-  context: z.object({ System: z.object({ application }) }).optional(),
+  session: z.optional(z.object({ new: z.boolean(), application })),
+  context: z.optional(z.object({ System: z.object({ application }) })),
   request: z.union([launchRequest, intentRequest, sessionEndedRequest, otherRequest]),
 });
 export type Envelope = z.infer<typeof envelopeSchema>;
