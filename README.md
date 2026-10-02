@@ -4,7 +4,7 @@
 
 An Alexa skill for asking an Echo about my record collection: what it is worth, which record is the most valuable, what has gone up, whether I own something, and what to play next. It is the voice front end for [Vinyl Value Vault](https://github.com/JakubMini/vinyl-value-vault), which keeps the collection and its prices. It runs as a Cloudflare Worker and is designed to run for free.
 
-> **Status:** built and tested, not deployed yet. It answers "what is my collection worth?" today. The other questions need new endpoints in the vault first; see the [roadmap](#roadmap).
+> **Status:** live since 2 October 2026, as a private skill on my own Amazon account. It answers "what is my collection worth?" today; ask it anything else and it says what it can do. The other questions need more from the vault first; see the [roadmap](#roadmap).
 
 ## What it does
 
@@ -142,7 +142,7 @@ wrangler.jsonc     Worker config: the vault binding, the skill id
 ## Roadmap
 
 - [x] The endpoint: request verification, and "what is my collection worth?"
-- [ ] Register the skill and deploy
+- [x] Register the skill and deploy
 - [ ] Vault: search, sorting by value, value changes over a week, month or year, and recommendations ([vinyl-value-vault](https://github.com/JakubMini/vinyl-value-vault))
 - [ ] "Which record is the most valuable?"
 - [ ] "What has gained, or lost, the most value this week / month / year?"
