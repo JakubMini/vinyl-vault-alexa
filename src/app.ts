@@ -3,7 +3,6 @@
  * the signature over it has been checked, and nothing is answered until the request is shown
  * to be fresh and addressed to this skill.
  */
-import { X509Certificate } from "node:crypto";
 import { Hono } from "hono";
 
 import {
@@ -19,7 +18,7 @@ import {
 } from "./envelope";
 import { handlers, unknownIntent, vaultUnavailable, welcome } from "./intents";
 import { type Vault, VaultError, vaultClient } from "./vault";
-import { VerificationError, checkEnvelope, verifySignature } from "./verify";
+import { VerificationError, checkEnvelope, parseChain, verifySignature } from "./verify";
 
 export interface AppOptions {
   /** PEM certificates a signing chain must reach. Production passes the pinned Amazon roots. */
@@ -27,6 +26,8 @@ export interface AppOptions {
 }
 
 export function createApp({ trustAnchors }: AppOptions) {
+  // Read once, when the isolate starts: they are constants, not request state.
+  const anchors = trustAnchors.flatMap((pem) => parseChain(pem));
   const app = new Hono<{ Bindings: Env }>();
 
   app.get("/health", (c) => c.json({ ok: true, service: "vinyl-vault-alexa", now: new Date().toISOString() }));
@@ -34,12 +35,13 @@ export function createApp({ trustAnchors }: AppOptions) {
   app.post("/alexa", async (c) => {
     const started = Date.now();
     const now = new Date();
-    const body = await c.req.text();
+    // The signature covers the exact bytes sent, so verify those, then decode them.
+    const raw = new Uint8Array(await c.req.arrayBuffer());
+    const body = new TextDecoder().decode(raw);
 
     let envelope: Envelope;
     try {
-      const anchors = trustAnchors.map((pem) => new X509Certificate(pem));
-      await verifySignature(c.req.raw.headers, body, anchors, now);
+      await verifySignature(c.req.raw.headers, raw, anchors, now);
       envelope = parseEnvelope(body);
       checkEnvelope({ timestamp: envelope.request.timestamp, applicationId: applicationId(envelope) }, c.env.ALEXA_SKILL_ID, now);
     } catch (error) {

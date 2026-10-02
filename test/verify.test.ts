@@ -1,14 +1,17 @@
-import { X509Certificate } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { AMAZON_ROOT_PEMS } from "../src/amazon-roots";
-import realAmazonChainPem from "./fixtures/certs/amazon-echo-api-cert-12.pem?raw";
 import { VerificationError, checkCertUrl, checkChain, checkEnvelope, parseChain, verifySignature } from "../src/verify";
 import {
   CERT_URL,
   SKILL_ID,
   chainPem,
+  ecChainPem,
+  ecRootPem,
+  impostorChainPem,
+  realAmazonChainPem,
+  renamedIntermediatePem,
   rogueChainPem,
   serveCertificate,
   signatureFor,
@@ -17,9 +20,10 @@ import {
 } from "./helpers";
 import { network } from "./network";
 
-const testRoot = new X509Certificate(testRootPem);
-const anchors = [testRoot];
+const anchors = parseChain(testRootPem);
+const amazonRoots = () => AMAZON_ROOT_PEMS.flatMap((pem) => parseChain(pem));
 const now = new Date();
+const bytes = (text: string) => new TextEncoder().encode(text);
 
 function reason(fn: () => unknown): string | undefined {
   try {
@@ -67,66 +71,87 @@ describe("the certificate URL", () => {
 });
 
 describe("the certificate chain", () => {
-  it("accepts a current leaf for echo-api.amazon.com that chains to a trusted root", () => {
-    expect(reason(() => checkChain(parseChain(chainPem), anchors, now))).toBeUndefined();
+  it("accepts a current leaf for echo-api.amazon.com that chains to a trusted root", async () => {
+    expect(await asyncReason(checkChain(parseChain(chainPem), anchors, now))).toBeUndefined();
   });
 
-  it("accepts a bundle that includes the trusted root itself", () => {
-    expect(reason(() => checkChain(parseChain(chainPem + testRootPem), anchors, now))).toBeUndefined();
+  it("accepts a bundle that includes the trusted root itself", async () => {
+    expect(await asyncReason(checkChain(parseChain(chainPem + testRootPem), anchors, now))).toBeUndefined();
   });
 
-  it("refuses a leaf that does not name echo-api.amazon.com", () => {
-    expect(reason(() => checkChain(parseChain(wrongSanChainPem), anchors, now))).toBe(
+  it("refuses a leaf that does not name echo-api.amazon.com", async () => {
+    expect(await asyncReason(checkChain(parseChain(wrongSanChainPem), anchors, now))).toBe(
       "signing cert does not name echo-api.amazon.com",
     );
   });
 
-  it("refuses a chain that ends at an untrusted root", () => {
-    expect(reason(() => checkChain(parseChain(rogueChainPem), anchors, now))).toBe("chain does not reach a trusted root");
+  it("accepts an elliptic-curve chain (P-384 root, P-256 intermediate), as Amazon Root CA 3 and 4 would give", async () => {
+    expect(await asyncReason(checkChain(parseChain(ecChainPem), parseChain(ecRootPem), now))).toBeUndefined();
+    expect(await asyncReason(checkChain(parseChain(ecChainPem), anchors, now))).toBe("chain does not reach a trusted root");
   });
 
-  it("refuses a chain whose certificates were not signed by each other", () => {
+  it("refuses a chain that ends at an untrusted root", async () => {
+    expect(await asyncReason(checkChain(parseChain(rogueChainPem), anchors, now))).toBe("chain does not reach a trusted root");
+  });
+
+  it("refuses a chain whose certificates were not signed by each other", async () => {
     const [leaf] = parseChain(chainPem);
     const [, rogueRoot] = parseChain(rogueChainPem);
-    expect(reason(() => checkChain([leaf!, rogueRoot!], anchors, now))).toBe("cert 0 is not signed by cert 1");
+    expect(await asyncReason(checkChain([leaf!, rogueRoot!], anchors, now))).toBe("cert 0 is not signed by cert 1");
   });
 
-  it("refuses a chain that passes through a certificate that is not a CA", () => {
+  it("refuses an impostor chain that copies the trusted names but not the keys", async () => {
+    expect(await asyncReason(checkChain(parseChain(impostorChainPem), anchors, now))).toBe("chain does not reach a trusted root");
+  });
+
+  it("refuses a leaf from an impostor, presented with the real intermediate", async () => {
+    const [impostorLeaf] = parseChain(impostorChainPem);
+    const [, realIntermediate] = parseChain(chainPem);
+    expect(await asyncReason(checkChain([impostorLeaf!, realIntermediate!], anchors, now))).toBe("cert 0 is not signed by cert 1");
+  });
+
+  it("refuses a link where the key matches but the issuer's name does not", async () => {
+    const [leaf] = parseChain(chainPem);
+    const [renamed] = parseChain(renamedIntermediatePem);
+    expect(await asyncReason(checkChain([leaf!, renamed!], anchors, now))).toBe("cert 0 is not signed by cert 1");
+  });
+
+  it("refuses a chain that passes through a certificate that is not a CA", async () => {
     const [leaf] = parseChain(chainPem);
     const [otherLeaf] = parseChain(wrongSanChainPem);
-    expect(reason(() => checkChain([leaf!, otherLeaf!], anchors, now))).toBe("cert 1 is not a CA");
+    expect(await asyncReason(checkChain([leaf!, otherLeaf!], anchors, now))).toBe("cert 1 is not a CA");
   });
 
-  it("refuses an expired certificate", () => {
-    expect(reason(() => checkChain(parseChain(chainPem), anchors, new Date("2200-01-01")))).toBe("cert 0 has expired");
+  it("refuses an expired certificate", async () => {
+    expect(await asyncReason(checkChain(parseChain(chainPem), anchors, new Date("2200-01-01")))).toBe("cert 0 has expired");
   });
 
-  it("refuses a certificate that is not valid yet", () => {
-    expect(reason(() => checkChain(parseChain(chainPem), anchors, new Date("2000-01-01")))).toBe("cert 0 is not yet valid");
+  it("refuses a certificate that is not valid yet", async () => {
+    expect(await asyncReason(checkChain(parseChain(chainPem), anchors, new Date("2000-01-01")))).toBe("cert 0 is not yet valid");
   });
 
-  it("does not trust the test root in production", () => {
-    const amazon = AMAZON_ROOT_PEMS.map((pem) => new X509Certificate(pem));
-    expect(reason(() => checkChain(parseChain(chainPem), amazon, now))).toBe("chain does not reach a trusted root");
+  it("does not trust the test root in production", async () => {
+    const amazon = amazonRoots();
+    expect(await asyncReason(checkChain(parseChain(chainPem), amazon, now))).toBe("chain does not reach a trusted root");
   });
 
   // A genuine chain Alexa signed with in 2023, from https://s3.amazonaws.com/echo.api/echo-api-cert-12.pem.
   // Leaf -> Amazon RSA 2048 M01 -> Amazon Root CA 1 (cross-signed by Starfield G2) -> Starfield G2
   // (cross-signed by Starfield Class 2, which is not pinned). The walk must stop at Amazon Root CA 1.
-  it("accepts a real Amazon signing chain, checked as of when it was current", () => {
-    const amazon = AMAZON_ROOT_PEMS.map((pem) => new X509Certificate(pem));
+  it("accepts a real Amazon signing chain, checked as of when it was current", async () => {
+    const amazon = amazonRoots();
     const chain = parseChain(realAmazonChainPem);
     expect(chain).toHaveLength(4);
-    expect(reason(() => checkChain(chain, amazon, new Date("2023-06-01")))).toBeUndefined();
-    expect(reason(() => checkChain(chain, amazon, now))).toBe("cert 0 has expired");
+    expect(await asyncReason(checkChain(chain, amazon, new Date("2023-06-01")))).toBeUndefined();
+    expect(await asyncReason(checkChain(chain, amazon, now))).toBe("cert 0 has expired");
   });
 
   it("pins five Amazon roots that are all valid today", () => {
-    const amazon = AMAZON_ROOT_PEMS.map((pem) => new X509Certificate(pem));
+    const amazon = amazonRoots();
     expect(amazon).toHaveLength(5);
     for (const root of amazon) {
-      expect(root.ca).toBe(true);
-      expect(new Date(root.validTo).getTime()).toBeGreaterThan(now.getTime());
+      expect(root.isCA).toBe(true);
+      expect(root.notAfter.getTime()).toBeGreaterThan(now.getTime());
     }
   });
 
@@ -151,33 +176,33 @@ describe("the signature", () => {
 
   it("accepts a body signed by the certificate's key", async () => {
     serveCertificate();
-    expect(await asyncReason(verifySignature(headers(), body, anchors, now))).toBeUndefined();
+    expect(await asyncReason(verifySignature(headers(), bytes(body), anchors, now))).toBeUndefined();
   });
 
   it("refuses a body changed after signing", async () => {
     serveCertificate();
-    expect(await asyncReason(verifySignature(headers(), body.replace("alexa", "mallory"), anchors, now))).toBe(
+    expect(await asyncReason(verifySignature(headers(), bytes(body.replace("alexa", "mallory")), anchors, now))).toBe(
       "signature does not match body",
     );
   });
 
   it("refuses a request without a signature, before fetching anything", async () => {
-    expect(await asyncReason(verifySignature(headers(null), body, anchors, now))).toBe("missing Signature-256");
+    expect(await asyncReason(verifySignature(headers(null), bytes(body), anchors, now))).toBe("missing Signature-256");
   });
 
   it("refuses a request whose certificate cannot be fetched", async () => {
     network.use(http.get(CERT_URL, () => new HttpResponse(null, { status: 403 }), { once: true }));
-    expect(await asyncReason(verifySignature(headers(), body, anchors, now))).toBe("cert fetch returned 403");
+    expect(await asyncReason(verifySignature(headers(), bytes(body), anchors, now))).toBe("cert fetch returned 403");
   });
 
   it("refuses a request when Amazon cannot be reached for the certificate", async () => {
     network.use(http.get(CERT_URL, () => HttpResponse.error(), { once: true }));
-    expect(await asyncReason(verifySignature(headers(), body, anchors, now))).toBe("cert fetch failed");
+    expect(await asyncReason(verifySignature(headers(), bytes(body), anchors, now))).toBe("cert fetch failed");
   });
 
   it("refuses a correctly signed body when the chain is untrusted", async () => {
     serveCertificate(rogueChainPem);
-    expect(await asyncReason(verifySignature(headers(), body, anchors, now))).toBe("chain does not reach a trusted root");
+    expect(await asyncReason(verifySignature(headers(), bytes(body), anchors, now))).toBe("chain does not reach a trusted root");
   });
 });
 
