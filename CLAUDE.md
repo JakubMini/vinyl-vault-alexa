@@ -57,10 +57,12 @@ and vault answers into speech. Nothing more.
 
 ## Stack and conventions
 
-- TypeScript in strict mode on Cloudflare Workers. Hono for HTTP, Zod for validation, Vitest
-  running inside workerd for tests. No Alexa SDK: the request envelope is small and typed with Zod.
+- TypeScript in strict mode on Cloudflare Workers. Hono (`hono/tiny`) for HTTP, the type guards in
+  `src/shape.ts` for validation, WebCrypto for signatures, Vitest running inside workerd for tests.
+  No Alexa SDK, and unlike the vault, no Zod: see "CPU" below.
 - Where things live: the Worker entry in `src/index.ts`; routes in `src/app.ts`; request verification in
-  `src/verify.ts` with the pinned Amazon roots in `src/amazon-roots.ts`; the request envelope and
+  `src/verify.ts`, certificate reading in `src/x509.ts`, the pinned Amazon roots in
+  `src/amazon-roots.ts`; JSON shape checks in `src/shape.ts`; the request envelope and
   response builder in `src/envelope.ts`; intent handlers in `src/intents.ts`; ranking and matching the record list in
   `src/collection.ts`; the vault client in
   `src/vault.ts`; phrasing helpers (money, lists, grades) in `src/speech.ts`; the Alexa skill
@@ -78,7 +80,16 @@ and vault answers into speech. Nothing more.
   `src/env.d.ts`; secret values are never in the repo (`.dev.vars` locally, `wrangler secret put`
   in production).
 - Respect the Workers free-plan budget: at most 50 outbound fetches and 10 ms CPU per invocation.
-  A request here costs one fetch for Amazon's certificate and one vault call.
+  A request here costs one fetch for Amazon's certificate and one vault call (two for risers).
+- **CPU.** Alexa traffic is sparse, so most requests meet a fresh isolate and pay its start-up
+  and first-use costs. Keep these out of `src/`, which `test/cpu-budget.test.ts` enforces:
+  - `Intl.*` formatters and `toLocale*`: ~9 ms the first time. Format by hand in `src/speech.ts`.
+  - `localeCompare`: ~6 ms the first time. Use `byText`.
+  - `node:crypto` and `node:buffer`: ~8 ms to load. Use WebCrypto and `src/x509.ts`.
+  - `zod`: the schemas take ~2 ms to build. Use `src/shape.ts`.
+
+  Before claiming a speed-up, measure it. Use `cpuTime` in `npx wrangler tail --format json` for
+  real requests, and `npx wrangler check startup` for start-up.
 - Alexa waits 8 seconds at most. Vault calls time out well before that.
 - Behaviour changes come with tests. Tests mock the network with Mock Service Worker and stub
   the vault binding; they never touch the internet.
