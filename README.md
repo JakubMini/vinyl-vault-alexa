@@ -4,7 +4,7 @@
 
 An Alexa skill for asking an Echo about my record collection: what it is worth, which record is the most valuable, what has gone up, whether I own something, and what to play next. It is the voice front end for [Vinyl Value Vault](https://github.com/JakubMini/vinyl-value-vault), which keeps the collection and its prices. It runs as a Cloudflare Worker and is designed to run for free.
 
-> **Status:** live since 2 October 2026, as a private skill on my own Amazon account. It answers "what is my collection worth?" today; ask it anything else and it says what it can do. The other questions need more from the vault first; see the [roadmap](#roadmap).
+> **Status:** live since 2 October 2026, as a private skill on my own Amazon account. It answers what the collection is worth, which record is the most valuable, what has gone up over the last month, and whether a record is in the collection. Weekly and yearly changes, and recommendations, need more from the vault first; see the [roadmap](#roadmap).
 
 ## What it does
 
@@ -15,17 +15,17 @@ You talk to it like this:
 
 Or open it and then ask: "Alexa, open vinyl vault."
 
-| Question | Status |
-| --- | --- |
-| "What is my collection worth?" | Built |
-| "Which record is the most valuable?" | Planned |
-| "What has gained the most value this week / month / year?" | Planned |
-| "Do I have Rumours?" | Planned |
-| "Recommend me a record." | Planned: a random record I own, never one of the last ten it suggested |
+| Question | What it says | Status |
+| --- | --- | --- |
+| "What is my collection worth?" | The total, how many records it covers, and how many are not priced yet | Built |
+| "Which record is the most valuable?" | The top record and its value, then the next two | Built |
+| "Which records have gained the most value this month?" | The three biggest risers and how much each gained | Built for a month. Asked about a week or a year, it says it can only compare with a month ago for now |
+| "Do I have Rumours?" | One match: its grade and value. Several: how many copies, or a list. None: says so | Built |
+| "Recommend me a record." | A random record I own, never one of the last ten it suggested | Planned |
 
 **About the wording.** A private Alexa skill has to be called by name, so the question is "Alexa, ask vinyl vault…", not just "Alexa, what is my collection worth?". Name-free questions are only offered to published, certified skills, and even then Alexa decides when to use them. For the fixed questions an [Alexa Routine](#asking-without-the-skill-name) gets close: the phrase "what is my vinyl collection worth" can be set to run "ask vinyl vault what my collection is worth".
 
-The skill says what it does not know. If some records have no price yet, the answer says so. When the price history is too short for a "this year" question, it will say how far back the history goes rather than invent a number.
+The skill says what it does not know. If some records have no price yet, the answer says so. When prices have been tracked for less than a month, "this month" becomes "since 2 October", so the answer never claims more history than there is.
 
 ## How it works
 
@@ -46,7 +46,12 @@ flowchart LR
 3. It looks up the **handler** for the intent and asks the vault for what it needs.
 4. It **phrases the answer** for the ear: whole pounds rather than pence, "one record" rather than "1 records", and the caveats that matter. Then it ends the session.
 
-The skill is deliberately thin. All data logic, such as totals, search, value changes and recommendations, lives behind the vault's API. The vault's own dashboard can then use the same answers, and this repo is only about voice.
+The skill is deliberately thin. Everything worked out from price history, such as totals and each record's change over the last 30 days, and anything stored, lives behind the vault's API. The vault's dashboard uses the same figures. The vault hands back the whole collection in one page, as the dashboard asks for it, and the skill only ranks and matches that list ([`src/collection.ts`](src/collection.ts)):
+
+- **Most valuable** sorts by current value and leaves unpriced records out.
+- **Gained the most** sorts by each record's 30-day change and keeps only real gains. The vault's daily totals tell the skill when tracking began, so it can say "since" instead of "over the last month" when history is short.
+- **Do I have…** needs every meaningful word of what was heard to appear in the artist or title. Words like "any", "by", "the" or "a copy of" are ignored. Accents and punctuation do not matter, so "bjork" finds Björk. Words of five letters or more may be a letter off, and nine or more two letters off, so speech recognition's "rumors" still finds "Rumours". Discogs' numbering of artists who share a name, such as "Nirvana (2)", is never matched or spoken.
+- **Records that have left the Discogs collection** are dropped as soon as the list arrives, so the skill never mentions them.
 
 The skill reaches the vault through a [service binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/): one Worker calling another inside Cloudflare, with no public network hop and no extra cost. The vault still checks its API key on every call.
 
@@ -131,8 +136,9 @@ src/
   amazon-roots.ts  the pinned Amazon root certificates
   envelope.ts      the Alexa request and response format, typed with Zod
   intents.ts       one handler per intent: what the skill says
+  collection.ts    ranking and matching the record list: most valuable, risers, "do I have"
   vault.ts         the vault API client, over the service binding
-  speech.ts        money and counts, phrased for the ear
+  speech.ts        money, counts, lists, grades, dates and names, phrased for the ear
 skill-package/     the skill manifest and interaction model, deployed with the ASK CLI
 scripts/           make-test-certs.sh: the throwaway CA the tests sign with
 test/              Vitest suites running inside workerd; fixtures/certs holds the test chain
@@ -143,10 +149,11 @@ wrangler.jsonc     Worker config: the vault binding, the skill id
 
 - [x] The endpoint: request verification, and "what is my collection worth?"
 - [x] Register the skill and deploy
-- [ ] Vault: search, sorting by value, value changes over a week, month or year, and recommendations ([vinyl-value-vault](https://github.com/JakubMini/vinyl-value-vault))
-- [ ] "Which record is the most valuable?"
-- [ ] "What has gained, or lost, the most value this week / month / year?"
-- [ ] "Do I have …?"
+- [ ] Vault: value changes over a week or a year as well as 30 days, and a log of recommendations ([vinyl-value-vault](https://github.com/JakubMini/vinyl-value-vault))
+- [x] "Which record is the most valuable?"
+- [x] "What has gained the most value this month?"
+- [ ] Weekly and yearly changes, and "what has lost the most?" (needs the vault to report changes over other periods)
+- [x] "Do I have …?"
 - [ ] "Recommend me a record"
 - [ ] Better recognition of record names: feed the collection's artists and titles into the interaction model
 - [ ] "…and that's up £120 this month" on the collection total

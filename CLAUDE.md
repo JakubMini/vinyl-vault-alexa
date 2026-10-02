@@ -61,11 +61,14 @@ and vault answers into speech. Nothing more.
   running inside workerd for tests. No Alexa SDK: the request envelope is small and typed with Zod.
 - Where things live: the Worker entry in `src/index.ts`; routes in `src/app.ts`; request verification in
   `src/verify.ts` with the pinned Amazon roots in `src/amazon-roots.ts`; the request envelope and
-  response builder in `src/envelope.ts`; intent handlers in `src/intents.ts`; the vault client in
+  response builder in `src/envelope.ts`; intent handlers in `src/intents.ts`; ranking and matching the record list in
+  `src/collection.ts`; the vault client in
   `src/vault.ts`; phrasing helpers (money, lists, grades) in `src/speech.ts`; the Alexa skill
   manifest and interaction model in `skill-package/`.
-- Data logic (search, ranking, value changes, recommendations) belongs in the vault's API, not
-  here. If a question needs new data, add a vault endpoint first.
+- Anything worked out from price history (totals, value changes) or stored (recommendations)
+  belongs in the vault's API, not here. The vault returns the whole collection in one page, as its
+  dashboard uses it; ranking and matching that list for speech happens here, in
+  `src/collection.ts`. If a question needs new data, add a vault endpoint first.
 - The vault is reached through the `VAULT` service binding, never its public URL. Its bearer
   auth still applies: `VAULT_API_KEY` is a secret.
 - Money arrives from the vault as integers in minor units (pence). Condition grades use the

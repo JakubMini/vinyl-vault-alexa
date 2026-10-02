@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import { VaultError, vaultClient } from "../src/vault";
-import { FAKE_COLLECTION, TEST_VAULT_API_KEY } from "./fake-vault";
+import { FAKE_COLLECTION, FAKE_RECORDS, TEST_VAULT_API_KEY, fakeRecord } from "./fake-vault";
 
 /** A service binding that answers every call with `respond`, recording what it was asked. */
 function binding(respond: (request: Request) => Response | Promise<Response>) {
@@ -62,5 +62,33 @@ describe("the vault client", () => {
     const { fetcher, seen } = binding(() => Response.json(FAKE_COLLECTION));
     expect(await failure(vaultClient(fetcher, "").collection())).toBe("VAULT_API_KEY is not configured");
     expect(seen).toHaveLength(0);
+  });
+
+  it("reads every record still in the collection, leaving out those that have left it", async () => {
+    const records = await vaultClient(env.VAULT, TEST_VAULT_API_KEY).records();
+    expect(records).toHaveLength(FAKE_RECORDS.length - 1);
+    expect(records.map((r) => r.title)).not.toContain("The Dark Side Of The Moon");
+  });
+
+  it("pages through a collection bigger than one page", async () => {
+    const all = Array.from({ length: 2_300 }, (_, i) => fakeRecord({ artist: "A", title: `T${i}` }));
+    const { fetcher, seen } = binding((request) => {
+      const url = new URL(request.url);
+      const offset = Number(url.searchParams.get("offset"));
+      const limit = Number(url.searchParams.get("limit"));
+      return Response.json({ records: all.slice(offset, offset + limit), total: all.length });
+    });
+    expect(await vaultClient(fetcher, "k3y").records()).toHaveLength(2_300);
+    expect(seen.map((r) => new URL(r.url).search)).toEqual([
+      "?limit=1000&offset=0",
+      "?limit=1000&offset=1000",
+      "?limit=1000&offset=2000",
+    ]);
+  });
+
+  it("lists the days that have a collection total", async () => {
+    const days = await vaultClient(env.VAULT, TEST_VAULT_API_KEY).trackedDays(31);
+    expect(days).toHaveLength(31);
+    expect(days.at(-1)).toBe(new Date().toISOString().slice(0, 10));
   });
 });

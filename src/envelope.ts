@@ -5,8 +5,25 @@
  */
 import { z } from "zod";
 
-const slot = z.object({ name: z.string(), value: z.string().optional() });
+// For a custom slot type Alexa says what it heard (`value`) and, separately, which of the
+// type's values that resolved to (`resolutions`), so "past seven days" can arrive as "week".
+const resolution = z.object({
+  status: z.object({ code: z.string() }),
+  values: z.array(z.object({ value: z.object({ name: z.string(), id: z.string().optional() }) })).optional(),
+});
+const slot = z.object({
+  name: z.string(),
+  value: z.string().optional(),
+  resolutions: z.object({ resolutionsPerAuthority: z.array(resolution) }).optional(),
+});
 export type Slot = z.infer<typeof slot>;
+
+/** The id of the slot type value Alexa matched, if it matched one ("ER_SUCCESS_MATCH"). */
+export function resolvedId(slot: Slot | undefined): string | undefined {
+  const match = slot?.resolutions?.resolutionsPerAuthority.find((r) => r.status.code === "ER_SUCCESS_MATCH");
+  const value = match?.values?.[0]?.value;
+  return value?.id ?? value?.name;
+}
 
 const common = { requestId: z.string(), timestamp: z.string(), locale: z.string().optional() };
 

@@ -48,7 +48,7 @@ export function createApp({ trustAnchors }: AppOptions) {
       return c.json({ error: "Bad request" }, 400);
     }
 
-    const result = await respond(envelope.request, vaultClient(c.env.VAULT, c.env.VAULT_API_KEY));
+    const result = await respond(envelope.request, vaultClient(c.env.VAULT, c.env.VAULT_API_KEY), now);
     log({ event: "alexa.request", request_type: envelope.request.type, ...result.log, ms: Date.now() - started });
     return c.json(result.response);
   });
@@ -81,21 +81,28 @@ interface Outcome {
   log: Record<string, unknown>;
 }
 
-async function respond(request: AlexaRequest, vault: Vault): Promise<Outcome> {
+async function respond(request: AlexaRequest, vault: Vault, now: Date): Promise<Outcome> {
   if (request.type === "LaunchRequest") {
     return { response: toResponse(welcome()), log: { outcome: "welcomed" } };
   }
 
   if (isIntentRequest(request)) {
     const intent = request.intent.name;
+    const slots = request.intent.slots ?? {};
+    // What was heard for each slot ("rumours", "week"): what the user said about records, and
+    // the first thing to check when an answer misses.
+    const heard = Object.fromEntries(Object.values(slots).map((slot) => [slot.name, slot.value ?? null]));
     const handler = handlers[intent];
-    if (!handler) return { response: toResponse(unknownIntent()), log: { intent, outcome: "unknown_intent" } };
+    if (!handler) return { response: toResponse(unknownIntent()), log: { intent, slots: heard, outcome: "unknown_intent" } };
     try {
-      const reply = await handler({ slots: request.intent.slots ?? {}, vault });
-      return { response: toResponse(reply), log: { intent, outcome: "answered" } };
+      const reply = await handler({ slots, vault, now });
+      return { response: toResponse(reply), log: { intent, slots: heard, outcome: "answered" } };
     } catch (error) {
       if (!(error instanceof VaultError)) throw error;
-      return { response: toResponse(vaultUnavailable()), log: { intent, outcome: "vault_unavailable", error: error.message } };
+      return {
+        response: toResponse(vaultUnavailable()),
+        log: { intent, slots: heard, outcome: "vault_unavailable", error: error.message },
+      };
     }
   }
 

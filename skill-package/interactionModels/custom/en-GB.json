@@ -38,13 +38,166 @@
             "value my collection"
           ]
         },
-        { "name": "AMAZON.HelpIntent", "samples": [] },
-        { "name": "AMAZON.FallbackIntent", "samples": [] },
-        { "name": "AMAZON.StopIntent", "samples": [] },
-        { "name": "AMAZON.CancelIntent", "samples": [] },
-        { "name": "AMAZON.NavigateHomeIntent", "samples": [] }
+        {
+          "name": "MostValuableIntent",
+          "slots": [],
+          "samples": [
+            "which record is most expensive",
+            "which record is the most expensive",
+            "which vinyl is most expensive",
+            "which vinyl is the most expensive",
+            "what is my most expensive record",
+            "what's my most expensive record",
+            "what's my most expensive vinyl",
+            "what is my most valuable record",
+            "what's my most valuable record",
+            "what's my most valuable vinyl",
+            "which is my most valuable record",
+            "which record is worth the most",
+            "which vinyl is worth the most",
+            "which album is worth the most",
+            "which records are worth the most",
+            "what are my most valuable records",
+            "what's the most valuable record in my collection",
+            "what is the most expensive record I own",
+            "what's my priciest record",
+            "for my most valuable record",
+            "about my most valuable record"
+          ]
+        },
+        {
+          "name": "RisersIntent",
+          "slots": [
+            {
+              "name": "period",
+              "type": "PERIOD"
+            }
+          ],
+          "samples": [
+            "which records have gained the most value",
+            "which vinyls have gained the most value",
+            "which records have gained value",
+            "what has gained value",
+            "what's gone up in value",
+            "what has gone up in value",
+            "which records have gone up",
+            "which records have gone up the most",
+            "what's gone up",
+            "what are my biggest risers",
+            "what has increased in value",
+            "which records are worth more",
+            "which records have gained the most value in the last {period}",
+            "which records have gained the most value over the last {period}",
+            "which records have gained the most value in the past {period}",
+            "which records have gained the most value over the past {period}",
+            "which records have gained the most value this {period}",
+            "which vinyls have gained the most value in the last {period}",
+            "which vinyls have gained the most value over the last {period}",
+            "which vinyls have gained the most value in the past {period}",
+            "which vinyls have gained the most value over the past {period}",
+            "which vinyls have gained the most value this {period}",
+            "what's gone up in the last {period}",
+            "what's gone up over the last {period}",
+            "what's gone up in the past {period}",
+            "what's gone up over the past {period}",
+            "what's gone up this {period}",
+            "which records have gone up the most in the last {period}",
+            "which records have gone up the most over the last {period}",
+            "which records have gone up the most in the past {period}",
+            "which records have gone up the most over the past {period}",
+            "which records have gone up the most this {period}",
+            "what were my biggest risers this {period}",
+            "what are my biggest risers this {period}",
+            "what has gained value this {period}"
+          ]
+        },
+        {
+          "name": "FindRecordIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "do I have {query}",
+            "do I own {query}",
+            "have I got {query}",
+            "if I have {query}",
+            "if I own {query}",
+            "if I've got {query}",
+            "whether I have {query}",
+            "whether I own {query}",
+            "is {query} in my collection",
+            "if {query} is in my collection",
+            "check if I have {query}",
+            "check whether I own {query}",
+            "look for {query}",
+            "search for {query}",
+            "find {query}",
+            "I have {query}",
+            "I own {query}",
+            "I've got {query}",
+            "I have got {query}"
+          ]
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        }
       ],
-      "types": []
+      "types": [
+        {
+          "name": "PERIOD",
+          "values": [
+            {
+              "id": "week",
+              "name": {
+                "value": "week",
+                "synonyms": [
+                  "seven days"
+                ]
+              }
+            },
+            {
+              "id": "month",
+              "name": {
+                "value": "month",
+                "synonyms": [
+                  "thirty days",
+                  "four weeks"
+                ]
+              }
+            },
+            {
+              "id": "year",
+              "name": {
+                "value": "year",
+                "synonyms": [
+                  "twelve months",
+                  "three hundred and sixty five days"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   }
 }
