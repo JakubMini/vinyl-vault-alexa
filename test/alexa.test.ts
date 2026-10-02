@@ -14,7 +14,7 @@ describe("POST /alexa", () => {
   it("welcomes the user and waits for a question when the skill is opened", async () => {
     const { response } = await spoken(signedRequest(envelope({ type: "LaunchRequest" })));
     expect(response.outputSpeech?.text).toMatch(/^Vinyl Vault here\./);
-    expect(response.reprompt?.outputSpeech.text).toMatch(/what is my collection worth/);
+    expect(response.reprompt?.outputSpeech.text).toMatch(/which record is the most valuable/);
     expect(response.shouldEndSession).toBe(false);
   });
 
@@ -26,6 +26,24 @@ describe("POST /alexa", () => {
       text: "Your 163 records are worth about £3,450. 12 of them haven't been priced yet, so the real total is higher.",
     });
     expect(response.shouldEndSession).toBe(true);
+  });
+
+  it("names the most valuable record, from the vault's record list", async () => {
+    const { response } = await spoken(signedRequest(intent("MostValuableIntent")));
+    expect(response.outputSpeech?.text).toMatch(/^Your most valuable record is Blue Train by John Coltrane, worth about £850\./);
+    expect(response.shouldEndSession).toBe(true);
+  });
+
+  it("names the biggest risers over the last month, leaving out records that have left the collection", async () => {
+    const { response } = await spoken(signedRequest(intent("RisersIntent", { period: { name: "period", value: "month" } })));
+    expect(response.outputSpeech?.text).toBe(
+      "Over the last month, your biggest riser is Blue Train by John Coltrane, up £25 to about £850. Then OK Computer by Radiohead, up £12, and Nevermind by Nirvana, up £4.",
+    );
+  });
+
+  it("looks a record up by what was heard", async () => {
+    const { response } = await spoken(signedRequest(intent("FindRecordIntent", { query: { name: "query", value: "rumors by fleetwood mac" } })));
+    expect(response.outputSpeech?.text).toBe("Yes, you have 2 copies of Rumours by Fleetwood Mac.");
   });
 
   it("apologises, rather than failing the request, when the vault cannot answer", async () => {

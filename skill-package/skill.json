@@ -5,8 +5,8 @@
       "locales": {
         "en-GB": {
           "name": "Vinyl Vault",
-          "summary": "Ask what your record collection is worth.",
-          "description": "Answers questions about the record collection kept in Vinyl Value Vault, starting with what the whole collection is worth.",
+          "summary": "Ask about your record collection: its value, its most valuable record, and more.",
+          "description": "Answers questions about the record collection kept in Vinyl Value Vault: what it is worth, which record is the most valuable, what has gone up in value, and whether a record is in the collection.",
           "examplePhrases": [
             "Alexa, open vinyl vault",
             "Alexa, ask vinyl vault what my collection is worth",

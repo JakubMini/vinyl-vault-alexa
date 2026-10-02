@@ -7,6 +7,10 @@ import { z } from "zod";
 
 /** Alexa gives up after 8 seconds; leave room for the certificate fetch and speaking. */
 const VAULT_TIMEOUT_MS = 4_000;
+/** The most records the vault returns in one page. A personal collection fits in one. */
+const PAGE_SIZE = 1_000;
+/** A runaway paging loop would spend the free plan's 50 subrequests; this is plenty. */
+const MAX_PAGES = 5;
 
 /** The vault could not answer: unreachable, refused us, or said something unexpected. */
 export class VaultError extends Error {
@@ -26,9 +30,35 @@ const collectionSummary = z.object({
 });
 export type CollectionSummary = z.infer<typeof collectionSummary>;
 
+const dailyTotals = z.object({
+  /** One entry per UTC day that has a total, oldest first. Days before tracking began are absent. */
+  daily: z.array(z.object({ day: z.string() })),
+});
+
+const listedRecord = z.object({
+  id: z.number().int(),
+  artist: z.string(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  media_condition: z.string(),
+  current_value_minor: z.number().int().nullable(),
+  current_currency: z.string().nullable(),
+  /** Set when the record has left the Discogs collection; such records are not "in" the collection. */
+  discogs_removed_at: z.string().nullable(),
+  /** Value now minus value 30 days ago, or minus its first price if that was more recent. */
+  change_30d_minor: z.number().int().nullable(),
+});
+export type CollectionRecord = z.infer<typeof listedRecord>;
+
+const recordsPage = z.object({ records: z.array(listedRecord), total: z.number().int() });
+
 export interface Vault {
   /** GET /api/collection: the total value of every record still in the collection. */
   collection(): Promise<CollectionSummary>;
+  /** GET /api/collection?days=N: the days in that window that have a collection total. */
+  trackedDays(days: number): Promise<string[]>;
+  /** GET /api/records: every record still in the collection (removed ones are left out). */
+  records(): Promise<CollectionRecord[]>;
 }
 
 export function vaultClient(binding: Fetcher, apiKey: string): Vault {
@@ -52,5 +82,17 @@ export function vaultClient(binding: Fetcher, apiKey: string): Vault {
 
   return {
     collection: () => get("/collection", collectionSummary),
+
+    trackedDays: async (days) => (await get(`/collection?days=${days}`, dailyTotals)).daily.map((d) => d.day),
+
+    records: async () => {
+      const all: CollectionRecord[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { records, total } = await get(`/records?limit=${PAGE_SIZE}&offset=${all.length}`, recordsPage);
+        all.push(...records);
+        if (records.length === 0 || all.length >= total) break;
+      }
+      return all.filter((record) => record.discogs_removed_at === null);
+    },
   };
 }
