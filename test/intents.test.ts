@@ -49,6 +49,12 @@ describe("the interaction model", () => {
     expect(periods).toEqual(["week", "month", "year"]);
   });
 
+  it("still catches 'ask vinyl vault if I have …', where Alexa strips the 'if'", () => {
+    // "if" and "whether" are connecting words after "ask <name>": the model only sees "I have rumours".
+    const find = intents.find((i) => i.name === "FindRecordIntent")!.samples;
+    expect(find).toEqual(expect.arrayContaining(["I have {query}", "I own {query}", "I've got {query}"]));
+  });
+
   it("is invoked as 'vinyl vault'", () => {
     expect(model.interactionModel.languageModel.invocationName).toBe("vinyl vault");
   });

@@ -134,7 +134,11 @@
             "check whether I own {query}",
             "look for {query}",
             "search for {query}",
-            "find {query}"
+            "find {query}",
+            "I have {query}",
+            "I own {query}",
+            "I've got {query}",
+            "I have got {query}"
           ]
         },
         {

@@ -37,12 +37,19 @@ const FILLER = new Set([
   "record", "records", "album", "albums", "vinyl", "vinyls", "lp", "lps", "copy", "copies",
 ]);
 
+// Letters that Unicode does not treat as a base letter plus an accent, so NFKD leaves them
+// alone, but that speech recognition writes as plain Latin: "Młynarski" is heard as "mlynarski".
+const OWN_LETTERS: Record<string, string> = {
+  ł: "l", ø: "o", æ: "ae", œ: "oe", ß: "ss", đ: "d", ð: "d", þ: "th", ı: "i",
+};
+
 /** Lowercase words without accents or punctuation: "Björk's Début!" -> ["bjorks", "debut"]. */
 export function words(text: string): string[] {
   return text
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    .replace(/[łøæœßđðþı]/g, (letter) => OWN_LETTERS[letter] ?? letter)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // the accents NFKD split off
     .replace(/&/g, " and ")
     .replace(/['’]/g, "")
     .split(/[^a-z0-9]+/)

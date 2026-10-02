@@ -7,6 +7,9 @@ describe("words", () => {
   it("lowercases and drops accents, apostrophes and punctuation", () => {
     expect(words("Björk's Début!")).toEqual(["bjorks", "debut"]);
     expect(words("Simon & Garfunkel")).toEqual(["simon", "and", "garfunkel"]);
+    // Letters that are not an accent on a base letter, as in Polish and Nordic names.
+    expect(words("Wojciech Młynarski – Śpiewa Swoje Piosenki")).toEqual(["wojciech", "mlynarski", "spiewa", "swoje", "piosenki"]);
+    expect(words("Sigur Rós, Mø, Æ")).toEqual(["sigur", "ros", "mo", "ae"]);
     expect(words("  ")).toEqual([]);
   });
 });
